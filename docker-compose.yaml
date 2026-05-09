@@ -1,0 +1,11 @@
+---
+services:
+  bouncer-mikrotik-dev:
+    container_name: bouncer-mikrotik-dev
+    build: .
+    env_file: .env
+    network_mode: host
+    read_only: true
+    restart: no
+    cap_drop:
+      - ALL
