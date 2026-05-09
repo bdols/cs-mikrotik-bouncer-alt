@@ -65,6 +65,14 @@ var (
 		Help: "Total time spend waiting to get lock to execute commands in mikrotik, in microseconds",
 	},
 	)
+
+	metricActiveDecisions = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "active_decisions",
+			Help: "Current number of IPs in the in-memory cache (and thus in the active MikroTik address-list), by protocol",
+		},
+		[]string{"proto"},
+	)
 )
 
 // intitMetrics initializes metrics with zero values so that they are available in the graphs
@@ -103,6 +111,7 @@ func intitMetricsProto(proto string) {
 
 	metricMikrotikCmd.WithLabelValues(proto, "address_list", "add", "error").Add(0)
 	metricMikrotikCmd.WithLabelValues(proto, "address_list", "add", "success").Add(0)
+	metricMikrotikCmd.WithLabelValues(proto, "address_list", "delete_old", "success").Add(0)
 
 	modes := []string{"filter", "raw"}
 	for _, mode := range modes {
@@ -120,6 +129,17 @@ func recordMetrics(mal *mikrotikAddrList) {
 			metricTTLCacheStats.WithLabelValues("hits").Set(float64(mal.cache.Metrics().Hits))
 			metricTTLCacheStats.WithLabelValues("misses").Set(float64(mal.cache.Metrics().Misses))
 			metricTTLCacheStats.WithLabelValues("evictions").Set(float64(mal.cache.Metrics().Evictions))
+
+			var ipv4Count, ipv6Count float64
+			for _, item := range mal.cache.Items() {
+				if getProtoCmd(item.Key()) == "ip" {
+					ipv4Count++
+				} else {
+					ipv6Count++
+				}
+			}
+			metricActiveDecisions.WithLabelValues("ip").Set(ipv4Count)
+			metricActiveDecisions.WithLabelValues("ipv6").Set(ipv6Count)
 		}
 	}()
 }
