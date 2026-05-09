@@ -113,6 +113,17 @@ func runMikrotikCommands(mal *mikrotikAddrList) {
 			Msgf("Skipping setAddressListInFirewall, because IPv6 support is disabled")
 	}
 
+	// firewall rules now point at listName — safe to delete the previous list
+	if mal.currentListName != "" {
+		if useIPV4 {
+			mal.deleteAddressList("ip", mal.currentListName)
+		}
+		if useIPV6 {
+			mal.deleteAddressList("ipv6", mal.currentListName)
+		}
+	}
+	mal.currentListName = listName
+
 }
 
 func mikrotikConnect() (*routeros.Client, error) {
@@ -310,6 +321,44 @@ func (mal *mikrotikAddrList) addToAddressList(listName string, address string, t
 		// Str("comment", comment).
 		Msgf("Address added to mikrotik successfully")
 	return nil
+}
+
+// deleteAddressList removes all entries in the named address-list from MikroTik.
+// Used to clean up the previous timestamped list after firewall rules have been
+// switched to the new one.
+func (mal *mikrotikAddrList) deleteAddressList(proto string, listName string) {
+	reply, err := mal.c.Run(
+		fmt.Sprintf("/%s/firewall/address-list/print", proto),
+		"?list="+listName,
+		"=.proplist=.id",
+	)
+	if err != nil {
+		log.Error().Err(err).
+			Str("proto", proto).
+			Str("list_name", listName).
+			Msg("Failed to query old address-list for deletion")
+		return
+	}
+	for _, re := range reply.Re {
+		id := re.Map[".id"]
+		_, err := mal.c.Run(
+			fmt.Sprintf("/%s/firewall/address-list/remove", proto),
+			"=.id="+id,
+		)
+		if err != nil {
+			log.Error().Err(err).
+				Str("proto", proto).
+				Str("list_name", listName).
+				Str("id", id).
+				Msg("Failed to remove entry from old address-list")
+		}
+	}
+	log.Info().
+		Str("proto", proto).
+		Str("list_name", listName).
+		Int("count", len(reply.Re)).
+		Msg("Deleted old address-list")
+	metricMikrotikCmd.WithLabelValues(proto, "address_list", "delete_old", "success").Inc()
 }
 
 // setAddressListInFirewall sets given listName as src-address-list in firewall filter/raw rule in MikroTik

@@ -21,10 +21,10 @@ import (
 )
 
 type mikrotikAddrList struct {
-	c *routeros.Client
-	// cache map[string]string
-	cache *ttlcache.Cache[string, string]
-	mutex sync.Mutex
+	c               *routeros.Client
+	cache           *ttlcache.Cache[string, string]
+	mutex           sync.Mutex
+	currentListName string
 }
 
 // inspired by https://www.piotrbelina.com/blog/go-build-info-debug-readbuildinfo-ldflags/
